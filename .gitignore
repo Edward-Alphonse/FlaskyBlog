@@ -40,3 +40,7 @@ nosetests.xml
 
 # Virtual environment
 venv
+
+# IDE Info
+.idea
+
