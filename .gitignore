@@ -38,8 +38,8 @@ nosetests.xml
 # SQLite databases
 #*.sqlite
 #
-## Virtual environment
-#venv
+# Virtual environment
+venv
 
 # IDE Info
 .idea
