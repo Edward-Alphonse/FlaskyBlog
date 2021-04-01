@@ -1,12 +1,37 @@
-from flask import render_template, redirect, request, url_for, flash
+from flask import render_template, redirect, request, url_for, flash, Response
 from flask_login import login_user, logout_user, login_required, \
     current_user
 from . import auth
 from .. import db
-from ..models import User
 from ..email import send_email
-from .forms import LoginForm, RegistrationForm, ChangePasswordForm,\
-    PasswordResetRequestForm, PasswordResetForm, ChangeEmailForm
+# from .forms import LoginForm, RegistrationForm, ChangePasswordForm,\
+#     PasswordResetRequestForm, PasswordResetForm, ChangeEmailForm
+import json
+from ..models import Authentication, User
+import time
+from ..network import ResponseModel
+
+registerStatusMap = {
+    0: "成功",
+    1: "用户名或密码为空",
+    2: "用户名已注册"
+}
+
+loginStatusMap = {
+    0: "成功",
+    1: "用户名为空",
+    2: "密码为空",
+    3: "用户名未注册",
+    4: "用户名或密码错误",
+}
+
+changePassworStatusMap = {
+    0: "成功",
+    1: "用户名为空",
+    2: "旧密码为空",
+    3: "新密码为空",
+    4: "与当前密码相同",
+}
 
 
 @auth.before_app_request
@@ -29,42 +54,111 @@ def unconfirmed():
 
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
-    form = LoginForm()
-    if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data.lower()).first()
-        if user is not None and user.verify_password(form.password.data):
-            login_user(user, form.remember_me.data)
-            next = request.args.get('next')
-            if next is None or not next.startswith('/'):
-                next = url_for('main.index')
-            return redirect(next)
-        flash('Invalid email or password.')
-    return render_template('auth/login.html', form=form)
+    email = request.json["email"]
+    password = request.json.get("password", "")
+
+    if not email or len(email) == 0:
+        result = ResponseModel(1, loginStatusMap[1])
+        return Response(result.jsonSerialize(), mimetype='application/json')
+
+    if len(password) == 0:
+        result = ResponseModel(2, loginStatusMap[2])
+        return Response(result.jsonSerialize(), mimetype='application/json')
 
 
-@auth.route('/logout')
-@login_required
+    authentication = Authentication.query.filter_by(email=email).first()
+    if not authentication:
+        result = ResponseModel(3, loginStatusMap[3])
+        return Response(result.jsonSerialize(), mimetype='application/json')
+
+    if authentication.email != email or authentication.password != password:
+        result = ResponseModel(4, loginStatusMap[4])
+        return Response(result.jsonSerialize(), mimetype='application/json')
+
+    result = ResponseModel(0, loginStatusMap[0])
+    return Response(result.jsonSerialize(), mimetype='application/json')
+    # if isFinded == 0:
+    #     result = ResponseModel(1, registerStatusMap[1])
+    #     return Response(result.jsonSerialize(), mimetype='application/json')
+
+    # result = {
+    #     "status": "success"
+    # }
+    # # 1. 生成uid
+    # # 2. 写数据库
+    # #     uid，email，password，createtime
+    # print ("------login", result)
+    # return Response(json.dumps(result), mimetype='application/json')
+
+
+@auth.route('/logout', methods=['POST'])
+# @login_required
 def logout():
-    logout_user()
-    flash('You have been logged out.')
-    return redirect(url_for('main.index'))
+    result = ResponseModel(0, "成功")
+    return Response(result.jsonSerialize(), mimetype='application/json')
+    #
+    # logout_user()
+    # flash('You have been logged out.')
+    # return redirect(url_for('main.index'))
 
 
 @auth.route('/register', methods=['GET', 'POST'])
 def register():
-    form = RegistrationForm()
-    if form.validate_on_submit():
-        user = User(email=form.email.data.lower(),
-                    username=form.username.data,
-                    password=form.password.data)
-        db.session.add(user)
-        db.session.commit()
-        token = user.generate_confirmation_token()
-        send_email(user.email, 'Confirm Your Account',
-                   'auth/email/confirm', user=user, token=token)
-        flash('A confirmation email has been sent to you by email.')
-        return redirect(url_for('auth.login'))
-    return render_template('auth/register.html', form=form)
+    email = request.json["email"]
+    password = request.json.get("password", "")
+    hasRegistered = Authentication.query.filter_by(email=email).count()
+    print(hasRegistered)
+    if not email or len(password) == 0:
+        result = ResponseModel(1, registerStatusMap[1])
+        print(result.jsonSerialize())
+        response = Response(result.jsonSerialize(), mimetype='application/json')
+        return response
+
+    if hasRegistered != 0:
+        result = ResponseModel(2, registerStatusMap[2])
+        respose = Response(result.jsonSerialize(), mimetype='application/json')
+        return respose
+
+
+    #1.生成uid、创建时间,写入登录表
+    #2. 生成默认用户信息
+    id = 123
+    createTime = int(round(time.time() * 1000))
+    authentication = Authentication(id=id, email=email, password=password)
+    authentication.createTime = createTime
+
+    user = User()
+    user.id = id
+
+    db.session.add(authentication)
+    db.session.add(user)
+    db.session.commit()
+    result = ResponseModel(0, registerStatusMap[0])
+    response = Response(result.jsonSerialize(), mimetype='application/json')
+    return response
+
+
+    # res = User.query.filter_by(name='hzc').first
+    # if res:
+    #     jsonMap = {
+    #         'status': 'fail'
+    #     }
+    #     response = Response(json.dumps(jsonMap), mimetype='application/json')
+    #     return response
+    #
+    # user = User(id=123, name="hzc", avatar="", description="")
+
+    # authentication = Authentication(id=user.id, email=request.json["email"], password=request.json["password"])
+    # print(user)
+    # print(authentication)
+    # result = {
+    #     'status': 'success'
+    # }
+    # db.session.add(user)
+    # db.session.add(authentication)
+    # db.session.commit()
+    # response = Response(json.dumps(result),mimetype='application/json')
+    # return response
 
 
 @auth.route('/confirm/<token>')
@@ -90,20 +184,44 @@ def resend_confirmation():
     return redirect(url_for('main.index'))
 
 
-@auth.route('/change-password', methods=['GET', 'POST'])
-@login_required
+@auth.route('/change_password', methods=['GET', 'POST'])
+# @login_required
 def change_password():
-    form = ChangePasswordForm()
-    if form.validate_on_submit():
-        if current_user.verify_password(form.old_password.data):
-            current_user.password = form.password.data
-            db.session.add(current_user)
-            db.session.commit()
-            flash('Your password has been updated.')
-            return redirect(url_for('main.index'))
-        else:
-            flash('Invalid password.')
-    return render_template("auth/change_password.html", form=form)
+    email = request.json["email"]
+    oldPassword = request.json.get("old_password", "")
+    newPassword = request.json.get("new_password", "")
+    if not email or len(email) ==0:
+        result = ResponseModel(1, changePassworStatusMap[1])
+        return Response(result.jsonSerialize(), mimetype='application/json')
+
+    if len(oldPassword) == 0:
+        result = ResponseModel(2, changePassworStatusMap[2])
+        return Response(result.jsonSerialize(), mimetype='application/json')
+
+    if len(newPassword) == 0:
+        result = ResponseModel(3, changePassworStatusMap[3])
+        return Response(result.jsonSerialize(), mimetype='application/json')
+
+    if newPassword == oldPassword:
+        result = ResponseModel(4, changePassworStatusMap[4])
+        return Response(result.jsonSerialize(), mimetype='application/json')
+
+    authentication = Authentication.query.filter_by(email=email, password=oldPassword).first()
+    authentication.password = newPassword
+    db.session.commit()
+    result = ResponseModel(0, changePassworStatusMap[0])
+    return Response(result.jsonSerialize(), mimetype='application/json')
+    # form = ChangePasswordForm()
+    # if form.validate_on_submit():
+    #     if current_user.verify_password(form.old_password.data):
+    #         current_user.password = form.password.data
+    #         db.session.add(current_user)
+    #         db.session.commit()
+    #         flash('Your password has been updated.')
+    #         return redirect(url_for('main.index'))
+    #     else:
+    #         flash('Invalid password.')
+    # return render_template("auth/change_password.html", form=form)
 
 
 @auth.route('/reset', methods=['GET', 'POST'])

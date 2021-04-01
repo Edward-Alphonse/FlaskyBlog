@@ -16,9 +16,17 @@ pagedown = PageDown()
 login_manager = LoginManager()
 login_manager.login_view = 'auth.login'
 
+# 解决js fetch请求跨域问题
+def after_request(resp):
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type,Access-Token"
+    return resp
+
+
 
 def create_app(config_name):
     app = Flask(__name__)
+    app.after_request(after_request)
     app.config.from_object(config[config_name])
     config[config_name].init_app(app)
 
@@ -34,6 +42,12 @@ def create_app(config_name):
 
     from .auth import auth as auth_blueprint
     app.register_blueprint(auth_blueprint, url_prefix='/auth')
+
+    from .profile import profile as profile_blueprint
+    app.register_blueprint(profile_blueprint, url_prefix='/profile')
+
+    from .blog import blog as blog_blueprint
+    app.register_blueprint(blog_blueprint, url_prefix='/blog')
 
     from .api import api as api_blueprint
     app.register_blueprint(api_blueprint, url_prefix='/api/v1')
