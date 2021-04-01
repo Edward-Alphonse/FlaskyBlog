@@ -9,3 +9,10 @@ For Readers of the First Edition of the Book
 --------------------------------------------
 
 The code examples for the first edition of the book were moved to a different repository: [https://github.com/miguelgrinberg/flasky-first-edition](https://github.com/miguelgrinberg/flasky-first-edition).
+
+
+
+###运行Flask Blog
+1. 使用`pip install -r requirements.txt`安装依赖
+2. 运行`flask db upgrade`迁移的数据将数据导入数据库
+3. 执行launch.sh脚本

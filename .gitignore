@@ -36,11 +36,10 @@ nosetests.xml
 .pydevproject
 
 # SQLite databases
-*.sqlite
+#*.sqlite
+#
+## Virtual environment
+#venv
 
-# Virtual environment
-venv
-
-# Environment files
-.env
-.env-mysql
+# IDE Info
+.idea
